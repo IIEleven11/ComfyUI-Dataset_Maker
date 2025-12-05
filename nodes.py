@@ -24,16 +24,32 @@ class ConceptList:
 class LoraList:
     @classmethod
     def INPUT_TYPES(s):
-        return {"required": {"lora_names_text": ("STRING", {"multiline": True, "default": "lora1.safetensors\nlora2.safetensors"})}}
+        lora_list = ["None"] + folder_paths.get_filename_list("loras")
+        inputs = {
+            "required": {
+                "lora_count": ("INT", {"default": 1, "min": 1, "max": 50, "step": 1}),
+            },
+            "optional": {}
+        }
+        for i in range(1, 51):
+            inputs["optional"][f"lora_{i}"] = (lora_list,)
+        return inputs
     
     RETURN_TYPES = ("LIST",)
     RETURN_NAMES = ("lora_names",)
     FUNCTION = "process"
     CATEGORY = "DatasetMaker"
 
-    def process(self, lora_names_text):
-        loras = [line.strip() for line in lora_names_text.splitlines() if line.strip()]
-        return (loras,)
+    def process(self, lora_count, **kwargs):
+        loras = []
+        for i in range(1, 51):
+            key = f"lora_{i}"
+            lora_name = kwargs.get(key, "None")
+            if lora_name == "None":
+                lora_name = ""
+            loras.append(lora_name)
+            
+        return (loras[:lora_count],)
 
 class DatasetConfig:
     @classmethod
@@ -171,27 +187,13 @@ class SaveDatasetImage:
             
         return {}
 
-class GetLoraList:
-    @classmethod
-    def INPUT_TYPES(s):
-        return {"required": {}}
-    
-    RETURN_TYPES = ("STRING",)
-    FUNCTION = "get_loras"
-    CATEGORY = "DatasetMaker"
-
-    def get_loras(self):
-        loras = folder_paths.get_filename_list("loras")
-        return ("\n".join(loras),)
-
 NODE_CLASS_MAPPINGS = {
     "ConceptList": ConceptList,
     "LoraList": LoraList,
     "DatasetConfig": DatasetConfig,
     "ApplyLoraBatch": ApplyLoraBatch,
     "PromptBatch": PromptBatch,
-    "SaveDatasetImage": SaveDatasetImage,
-    "GetLoraList": GetLoraList
+    "SaveDatasetImage": SaveDatasetImage
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -200,6 +202,5 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "DatasetConfig": "Dataset Configuration",
     "ApplyLoraBatch": "Apply LoRA Batch",
     "PromptBatch": "Dataset Prompt Generator",
-    "SaveDatasetImage": "Save Dataset Image",
-    "GetLoraList": "Get Available LoRAs"
+    "SaveDatasetImage": "Save Dataset Image"
 }
