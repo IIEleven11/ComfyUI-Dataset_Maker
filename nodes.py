@@ -26,9 +26,7 @@ class LoraList:
     def INPUT_TYPES(s):
         lora_list = ["None"] + folder_paths.get_filename_list("loras")
         inputs = {
-            "required": {
-                "lora_count": ("INT", {"default": 1, "min": 1, "max": 50, "step": 1}),
-            },
+            "required": {},
             "optional": {}
         }
         for i in range(1, 51):
@@ -40,16 +38,14 @@ class LoraList:
     FUNCTION = "process"
     CATEGORY = "DatasetMaker"
 
-    def process(self, lora_count, **kwargs):
+    def process(self, **kwargs):
         loras = []
         for i in range(1, 51):
             key = f"lora_{i}"
             lora_name = kwargs.get(key, "None")
-            if lora_name == "None":
-                lora_name = ""
-            loras.append(lora_name)
-            
-        return (loras[:lora_count],)
+            if lora_name and lora_name != "None":
+                loras.append(lora_name)
+        return (loras,)
 
 class DatasetConfig:
     @classmethod
