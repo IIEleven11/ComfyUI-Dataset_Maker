@@ -181,10 +181,13 @@ class DatasetGenerator:
                 latent = torch.zeros([batch_size, 4, height // 8, width // 8], device=comfy.model_management.intermediate_device())
                 latent_image = {"samples": latent}
                 
+                # Prepare noise
+                noise = comfy.sample.prepare_noise(latent_image["samples"], current_seed + img_idx)
+                
                 # Sample
                 samples = comfy.sample.sample(
                     work_model, 
-                    current_seed + img_idx, 
+                    noise, 
                     steps, 
                     cfg, 
                     sampler_name, 
