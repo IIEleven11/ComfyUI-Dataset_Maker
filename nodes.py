@@ -6,7 +6,6 @@ import numpy as np
 from PIL import Image
 import time
 import itertools
-from typing import Union
 
 
 class AnyType(str):
@@ -17,24 +16,19 @@ class AnyType(str):
 
 class FlexibleOptionalInputType(dict):
     """A special class to make flexible nodes that accept dynamic inputs."""
-    
-    def __init__(self, type, data: Union[dict, None] = None):
+
+    def __init__(self, type):
         self.type = type
-        self.data = data
-        if self.data is not None:
-            for k, v in self.data.items():
-                self[k] = v
-    
+
     def __getitem__(self, key):
-        if self.data is not None and key in self.data:
-            return self.data[key]
         return (self.type,)
-    
+
     def __contains__(self, key):
         return True
 
 
 any_type = AnyType("*")
+
 
 class ConceptList:
     @classmethod
@@ -50,16 +44,15 @@ class ConceptList:
         concepts = [line.strip() for line in concepts_text.splitlines() if line.strip()]
         return (concepts,)
 
-
 class LoraList:
-    """Dataset LoRA List node with dynamic inputs. Use the frontend JS to add/remove LoRA slots."""
+    """Dynamic LoRA selector node - add as many LoRAs as needed with the + button."""
     
     @classmethod
     def INPUT_TYPES(s):
         return {
             "required": {},
             "optional": FlexibleOptionalInputType(any_type),
-            "hidden": {},
+            "hidden": {}
         }
     
     RETURN_TYPES = ("LIST",)
@@ -69,27 +62,21 @@ class LoraList:
 
     def process(self, **kwargs):
         loras = []
-        # Collect all lora_N inputs in order
-        lora_keys = sorted([k for k in kwargs.keys() if k.startswith('lora_')], 
-                          key=lambda x: int(x.split('_')[1]) if x.split('_')[1].isdigit() else 0)
+        # Sort by lora_1, lora_2, etc to maintain order
+        lora_keys = sorted([k for k in kwargs.keys() if k.startswith("lora_")], 
+                          key=lambda x: int(x.split("_")[1]) if x.split("_")[1].isdigit() else 0)
+        
         for key in lora_keys:
-            value = kwargs.get(key)
-            if isinstance(value, dict) and 'lora' in value:
-                # Handle Power Lora Loader style dict input
-                lora_name = value.get('lora', '')
-                if value.get('on', True) and lora_name:
-                    loras.append(lora_name)
-                else:
-                    loras.append('')
-            elif isinstance(value, str):
-                # Handle simple string input
-                if value and value != "None":
-                    loras.append(value)
-                else:
-                    loras.append('')
+            value = kwargs[key]
+            # Handle both simple string values and dict values (like power lora loader)
+            if isinstance(value, dict):
+                lora_name = value.get("lora", "")
             else:
-                loras.append('')
+                lora_name = value if value and value != "None" else ""
             
+            if lora_name:
+                loras.append(lora_name)
+        
         return (loras,)
 
 class DatasetConfig:
