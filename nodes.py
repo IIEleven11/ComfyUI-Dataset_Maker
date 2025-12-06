@@ -45,22 +45,28 @@ class ConceptList:
         return (concepts,)
 
 class LoraList:
-    """Dynamic LoRA selector node - add as many LoRAs as needed with the + button."""
+    """Dynamic LoRA selector node that applies LoRAs to a batch of concepts."""
     
     @classmethod
     def INPUT_TYPES(s):
         return {
-            "required": {},
+            "required": {
+                "model": ("MODEL",),
+                "clip": ("CLIP",),
+                "concepts": ("LIST",),
+                "images_per_concept": ("INT", {"default": 1, "min": 1, "max": 1000}),
+            },
             "optional": FlexibleOptionalInputType(any_type),
             "hidden": {}
         }
     
-    RETURN_TYPES = ("LIST",)
-    RETURN_NAMES = ("lora_names",)
+    RETURN_TYPES = ("MODEL", "CLIP", "LIST")
+    RETURN_NAMES = ("model", "clip", "concepts_batch")
     FUNCTION = "process"
     CATEGORY = "DatasetMaker"
 
-    def process(self, **kwargs):
+    def process(self, model, clip, concepts, images_per_concept, **kwargs):
+        # 1. Extract LoRAs
         loras = []
         # Sort by lora_1, lora_2, etc to maintain order
         lora_keys = sorted([k for k in kwargs.keys() if k.startswith("lora_")], 
@@ -74,89 +80,53 @@ class LoraList:
             else:
                 lora_name = value if value and value != "None" else ""
             
-            if lora_name:
-                loras.append(lora_name)
+            # We keep empty strings to maintain alignment with concepts if user selected "None"
+            loras.append(lora_name)
+
+        # 2. Align LoRAs with Concepts
+        # If fewer LoRAs than concepts, cycle them? Or pad with None?
+        # Requirement: "Each concept would use a specific lora."
+        # Assuming user provides LoRAs in order.
         
-        return (loras,)
-
-class DatasetConfig:
-    @classmethod
-    def INPUT_TYPES(s):
-        return {
-            "required": {
-                "concepts": ("LIST",),
-                "lora_names": ("LIST",),
-                "images_per_concept": ("INT", {"default": 1, "min": 1, "max": 1000}),
-            }
-        }
-    
-    RETURN_TYPES = ("LIST", "LIST")
-    RETURN_NAMES = ("concepts_batch", "lora_batch")
-    FUNCTION = "process"
-    CATEGORY = "DatasetMaker"
-
-    def process(self, concepts, lora_names, images_per_concept):
-        # Handle mismatch
-        if len(lora_names) == 0:
-             lora_names = [""] * len(concepts)
-        elif len(lora_names) < len(concepts):
-            # Cycle loras to match concepts length
-            lora_names = list(itertools.islice(itertools.cycle(lora_names), len(concepts)))
-        
-        concepts_batch = []
-        lora_batch = []
-        
-        for i in range(len(concepts)):
-            c = concepts[i]
-            l = lora_names[i]
-            for _ in range(images_per_concept):
-                concepts_batch.append(c)
-                lora_batch.append(l)
-                
-        return (concepts_batch, lora_batch)
-
-class ApplyLoraBatch:
-    @classmethod
-    def INPUT_TYPES(s):
-        return {
-            "required": {
-                "model": ("MODEL",),
-                "clip": ("CLIP",),
-                "lora_batch": ("LIST",),
-            }
-        }
-    
-    RETURN_TYPES = ("MODEL", "CLIP")
-    FUNCTION = "process"
-    CATEGORY = "DatasetMaker"
-
-    def process(self, model, clip, lora_batch):
+        if len(loras) < len(concepts):
+            # Pad with empty strings (no LoRA)
+            loras.extend([""] * (len(concepts) - len(loras)))
+        elif len(loras) > len(concepts):
+            # Truncate
+            loras = loras[:len(concepts)]
+            
+        # 3. Create Batch
         out_models = []
         out_clips = []
+        concepts_batch = []
         
-        for lora_name in lora_batch:
-            if not lora_name:
-                out_models.append(model)
-                out_clips.append(clip)
-                continue
-
-            lora_path = folder_paths.get_full_path("loras", lora_name)
-            if lora_path is None:
-                print(f"DatasetMaker: Lora not found: {lora_name}")
-                out_models.append(model)
-                out_clips.append(clip)
-                continue
-                
-            try:
-                m, c = comfy.sd.load_lora_for_models(model, clip, lora_path, 1.0, 1.0)
-                out_models.append(m)
-                out_clips.append(c)
-            except Exception as e:
-                print(f"DatasetMaker: Error loading lora {lora_name}: {e}")
-                out_models.append(model)
-                out_clips.append(clip)
+        for i in range(len(concepts)):
+            concept = concepts[i]
+            lora_name = loras[i]
             
-        return (out_models, out_clips)
+            # Prepare the model/clip for this concept
+            current_model = model
+            current_clip = clip
+            
+            if lora_name:
+                lora_path = folder_paths.get_full_path("loras", lora_name)
+                if lora_path:
+                    try:
+                        current_model, current_clip = comfy.sd.load_lora_for_models(model, clip, lora_path, 1.0, 1.0)
+                    except Exception as e:
+                        print(f"DatasetMaker: Error loading lora {lora_name}: {e}")
+                else:
+                    print(f"DatasetMaker: Lora not found: {lora_name}")
+            
+            # Add to batch N times
+            for _ in range(images_per_concept):
+                out_models.append(current_model)
+                out_clips.append(current_clip)
+                concepts_batch.append(concept)
+                
+        return (out_models, out_clips, concepts_batch)
+
+
 
 class PromptBatch:
     @classmethod
@@ -218,17 +188,13 @@ class SaveDatasetImage:
 NODE_CLASS_MAPPINGS = {
     "ConceptList": ConceptList,
     "LoraList": LoraList,
-    "DatasetConfig": DatasetConfig,
-    "ApplyLoraBatch": ApplyLoraBatch,
     "PromptBatch": PromptBatch,
     "SaveDatasetImage": SaveDatasetImage
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
     "ConceptList": "Dataset Concepts List",
-    "LoraList": "Dataset LoRA List",
-    "DatasetConfig": "Dataset Configuration",
-    "ApplyLoraBatch": "Apply LoRA Batch",
+    "LoraList": "Dataset LoRA Loader",
     "PromptBatch": "Dataset Prompt Generator",
     "SaveDatasetImage": "Save Dataset Image"
 }
