@@ -9,11 +9,9 @@ Input a list of concepts, one per line.
 - **Output**: List of concepts.
 
 ### Dataset LoRA List
-Input a list of LoRA filenames, one per line. These should correspond to the concepts in the Concept List.
+A dynamic node that allows you to select LoRAs from dropdowns. Right-click the node to add or remove LoRA slots. The LoRAs are mapped to concepts in order (top to bottom).
+- **Right-click menu**: "Add LoRA" to add a new slot, "Remove Last LoRA" to remove the last slot.
 - **Output**: List of LoRA names.
-
-### Get Available LoRAs
-Helper node that outputs a list of all available LoRAs in your `models/loras` folder as a string. You can copy-paste from this list to the LoRA List node.
 
 ### Dataset Configuration
 Configures the batch generation.
@@ -52,8 +50,8 @@ Saves the generated images into folders named after the concepts.
 
 ## Usage Flow
 
-1.  Add **Dataset Concepts List** and write your concepts.
-2.  Add **Dataset LoRA List** and write the corresponding LoRA filenames.
+1.  Add **Dataset Concepts List** and write your concepts (one per line).
+2.  Add **Dataset LoRA List**. Right-click and use "Add LoRA" to add as many LoRA slots as you have concepts. Select each LoRA from the dropdown - the order should match your concept list (top to bottom).
 3.  Connect both to **Dataset Configuration**. Set `images_per_concept`.
 4.  Load your Checkpoint. Connect Model and CLIP to **Apply LoRA Batch**.
 5.  Connect `lora_batch` from **Dataset Configuration** to **Apply LoRA Batch**.
